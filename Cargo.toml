@@ -1,6 +1,6 @@
 [package]
 name = "ghai"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["Robert Escriva <robert@rescrv.net>"]
 edition = "2021"
 description = "ghai provides an ai shine to the gh command"
@@ -14,4 +14,4 @@ tokio = "1.41"
 
 arrrg = "0.5"
 arrrg_derive = "0.5"
-yammer = "0.5"
+yammer = "0.6"

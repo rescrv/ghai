@@ -69,6 +69,7 @@ async fn summarize_issue(options: &Options, number: String) {
         images: None,
         template: None,
         keep_alive: None,
+        options: serde_json::json!({}),
     };
     yammer::Request::generate(yammer::RequestOptions::default(), g)
         .unwrap()
@@ -134,6 +135,7 @@ async fn summarize_pr(options: &Options, number: String) {
         images: None,
         template: None,
         keep_alive: None,
+        options: serde_json::json!({}),
     };
     yammer::Request::generate(yammer::RequestOptions::default(), g)
         .unwrap()
