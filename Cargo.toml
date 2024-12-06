@@ -1,17 +1,18 @@
 [package]
 name = "ghai"
-version = "0.2.0"
+version = "0.3.0"
 authors = ["Robert Escriva <robert@rescrv.net>"]
 edition = "2021"
-description = "ghai provides an ai shine to the gh command"
+description = "ghai provides an intelligent shine to the gh command"
 license = "Apache-2.0"
 
 [dependencies]
+chrono = "0.4"
 getopts = "0.2"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 tokio = "1.41"
 
-arrrg = "0.5"
-arrrg_derive = "0.5"
-yammer = "0.6"
+arrrg = "0.6"
+arrrg_derive = "0.6"
+yammer = "0.9"
