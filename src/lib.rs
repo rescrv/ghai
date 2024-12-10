@@ -68,6 +68,7 @@ pub enum EventPayload {}
 #[serde(deny_unknown_fields)]
 pub struct Label {
     pub id: serde_json::Value,
+    pub node_id: Option<String>,
     pub url: Option<String>,
     pub name: String,
     pub color: String,
