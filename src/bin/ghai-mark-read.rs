@@ -35,7 +35,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .arg("PATCH")
             .arg("-H")
             .arg("Accept: application/vnd.github+json")
-            .arg(&format!("/notifications/threads/{}", thread.id))
+            .arg(format!("/notifications/threads/{}", thread.id))
             .output()?;
     }
     Ok(())

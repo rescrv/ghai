@@ -268,3 +268,170 @@ impl Notification {
         Ok(pull_request)
     }
 }
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ReferencedWorkflow {
+    path: String,
+    sha: String,
+    r#ref: Option<String>,
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Action {
+    pub id: serde_json::Value,
+    pub name: Option<String>,
+    pub node_id: String,
+    pub check_suite_id: Option<u64>,
+    pub check_suite_node_id: Option<String>,
+    pub head_branch: Option<String>,
+    pub head_sha: String,
+    pub path: String,
+    pub run_number: u64,
+    pub run_attempt: Option<u64>,
+    pub referenced_workflows: Vec<ReferencedWorkflow>,
+    pub event: String,
+    pub status: Option<String>,
+    pub conclusion: Option<String>,
+    pub workflow_id: u64,
+    pub url: String,
+    pub html_url: String,
+    // TODO(rescrv): pull-request-minimal
+    pub pull_requests: Vec<serde_json::Value>,
+    pub created_at: String,
+    pub updated_at: String,
+    pub actor: Option<SimpleUser>,
+    pub triggering_actor: Option<SimpleUser>,
+    pub run_started_at: Option<String>,
+    pub jobs_url: String,
+    pub logs_url: String,
+    pub check_suite_url: String,
+    pub artifacts_url: String,
+    pub cancel_url: String,
+    pub rerun_url: String,
+    pub previous_attempt_url: Option<String>,
+    pub workflow_url: String,
+    // TODO(rescrv): head-commit
+    pub head_commit: serde_json::Value,
+    // TODO(rescrv): head-repository
+    pub repository: serde_json::Value,
+    // TODO(rescrv): head-repository
+    pub head_repository: serde_json::Value,
+    pub head_repository_id: Option<u64>,
+    pub display_title: String,
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Runs {
+    pub total_count: u64,
+    pub workflow_runs: Vec<Action>,
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RunJobs {
+    pub total_count: u64,
+    pub jobs: Vec<Job>,
+}
+
+impl Action {
+    #[allow(clippy::too_many_arguments)]
+    pub fn fetch_all(
+        owner: String,
+        repo: String,
+        actor: Option<String>,
+        workflow_run_branch: Option<String>,
+        event: Option<String>,
+        workflow_run_status: Option<String>,
+        per_page: Option<u64>,
+        page: Option<u64>,
+    ) -> Result<Vec<Action>, std::io::Error> {
+        let mut sep = '?';
+        let mut url = format!("/repos/{owner}/{repo}/actions/runs");
+        if let Some(actor) = actor {
+            url.push_str(&format!("{sep}actor={actor}"));
+            sep = '&';
+        }
+        if let Some(workflow_run_branch) = workflow_run_branch {
+            url.push_str(&format!("{sep}workflow_run_branch={workflow_run_branch}"));
+            sep = '&';
+        }
+        if let Some(event) = event {
+            url.push_str(&format!("{sep}event={event}"));
+            sep = '&';
+        }
+        if let Some(workflow_run_status) = workflow_run_status {
+            url.push_str(&format!("{sep}workflow_run_status={workflow_run_status}"));
+            sep = '&';
+        }
+        if let Some(per_page) = per_page {
+            url.push_str(&format!("{sep}per_page={per_page}"));
+            sep = '&';
+        }
+        if let Some(page) = page {
+            url.push_str(&format!("{sep}page={page}"));
+            sep = '&';
+        }
+        _ = sep;
+        let output = std::process::Command::new("gh")
+            .arg("api")
+            .arg(url)
+            .output()?;
+        let mut runs: Runs = serde_json::from_slice(&output.stdout)?;
+        runs.workflow_runs.sort_by_key(|n| n.updated_at.clone());
+        Ok(runs.workflow_runs)
+    }
+
+    pub fn fetch_jobs(&self) -> Result<Vec<Job>, std::io::Error> {
+        let sep = '?';
+        let url = self.jobs_url.clone();
+        _ = sep;
+        let output = std::process::Command::new("gh")
+            .arg("api")
+            .arg(&url)
+            .output()?;
+        let run_jobs: RunJobs = serde_json::from_slice(&output.stdout)?;
+        Ok(run_jobs.jobs)
+    }
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct JobStep {
+    pub status: String,
+    pub conclusion: Option<String>,
+    pub name: String,
+    pub number: u64,
+    pub started_at: Option<String>,
+    pub completed_at: Option<String>,
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Job {
+    pub id: serde_json::Value,
+    pub run_id: u64,
+    pub run_url: String,
+    pub run_attempt: Option<u64>,
+    pub node_id: String,
+    pub head_sha: String,
+    pub url: String,
+    pub html_url: Option<String>,
+    pub status: String,
+    pub conclusion: Option<String>,
+    pub created_at: String,
+    pub started_at: String,
+    pub completed_at: Option<String>,
+    pub name: String,
+    pub steps: Vec<JobStep>,
+    pub check_run_url: String,
+    pub labels: Vec<String>,
+    pub runner_id: Option<u64>,
+    pub runner_name: Option<String>,
+    pub runner_group_id: Option<u64>,
+    pub runner_group_name: Option<String>,
+    pub workflow_name: Option<String>,
+    pub head_branch: Option<String>,
+}
