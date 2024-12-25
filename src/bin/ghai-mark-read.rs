@@ -17,7 +17,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             continue;
         }
         let pr = thread.fetch_pull_request()?;
-        if pr.merged {
+        if pr.merged.unwrap_or(false) {
             continue;
         }
         let comments = pr.fetch_comments(
