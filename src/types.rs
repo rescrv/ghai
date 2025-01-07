@@ -189,6 +189,43 @@ pub struct Issue {
     pub sub_issues_summary: Option<serde_json::Value>,
 }
 
+impl Issue {
+    pub fn fetch_all(
+        org: String,
+        filter: Option<String>,
+        state: Option<String>,
+        sort: Option<String>,
+        since: Option<DateTime<FixedOffset>>,
+    ) -> Result<Vec<Issue>, std::io::Error> {
+        let mut sep = '?';
+        let mut url = format!("/orgs/{org}/issues");
+        if let Some(filter) = filter {
+            url.push_str(&format!("{sep}filter={filter}"));
+            sep = '&';
+        }
+        if let Some(state) = state {
+            url.push_str(&format!("{sep}state={state}"));
+            sep = '&';
+        }
+        if let Some(sort) = sort {
+            url.push_str(&format!("{sep}sort={sort}"));
+            sep = '&';
+        }
+        if let Some(since) = since {
+            url.push_str(&format!("{sep}since={}", since.to_rfc3339()));
+            sep = '&';
+        }
+        _ = sep;
+        let output = std::process::Command::new("gh")
+            .arg("api")
+            .arg(url)
+            .output()?;
+        let mut issues: Vec<Issue> = serde_json::from_slice(&output.stdout)?;
+        issues.sort_by_key(|n| n.number);
+        Ok(issues)
+    }
+}
+
 #[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct IssueComment {
