@@ -3,10 +3,12 @@
 //! The github notification interface is a bit weird. It doesn't have a good way to remain
 //! subscribed to types of activity.
 
+use arrrg::CommandLine;
 use claudius::{Anthropic, ContentBlock, KnownModel, MessageCreateParams, Model};
 use policyai::{Manager, Policy, Usage};
 use std::io::{self, Write};
 
+use ghai::parser::parse_lines;
 use ghai::policy::{get_policy_type, Decision};
 use ghai::xml::{build_issue_notification_context, build_pull_request_notification_context};
 use ghai::Notification;
@@ -40,9 +42,12 @@ async fn generate_summary(
         .join("\n"))
 }
 
-fn confirm_via_ui(summary: &str) -> bool {
+#[derive(Debug, Default, Eq, PartialEq, arrrg_derive::CommandLine)]
+struct Options {}
+
+fn confirm_via_ui(summary: &str, action: &str) -> bool {
     println!("Summary: {}", summary);
-    print!("Confirm? (y/N): ");
+    print!("Mark as {}? (y/N): ", action);
     io::stdout().flush().unwrap();
 
     let mut input = String::new();
@@ -53,25 +58,58 @@ fn confirm_via_ui(summary: &str) -> bool {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let (_opts, args) =
+        Options::from_command_line("USAGE: ghai-process-notifications [policy-files...]");
+
     let client = Anthropic::new(None)?;
     let mut manager = Manager::default();
-    manager.add(Policy {
-        r#type: get_policy_type(),
-        prompt: "The notification is for a pull request.".to_string(),
-        action: serde_json::json! {{
-            "mark_unread": true,
-            "mark_read": false,
-        }},
-    });
-    manager.add(Policy {
-        r#type: get_policy_type(),
-        prompt: "The author of is @sanketkedia.".to_string(),
-        action: serde_json::json! {{
-            "mark_unread": false,
-            "mark_read": true,
-            "priority": "low",
-        }},
-    });
+
+    // Read and concatenate all policy files
+    let mut concatenated_content = String::new();
+    for file_path in &args {
+        match std::fs::read_to_string(file_path) {
+            Ok(content) => {
+                concatenated_content.push_str(&content);
+                concatenated_content.push('\n');
+            }
+            Err(e) => {
+                eprintln!("Error reading file {}: {}", file_path, e);
+                std::process::exit(1);
+            }
+        }
+    }
+
+    // Parse the concatenated content using the parser
+    if !concatenated_content.trim().is_empty() {
+        let parsed_results = parse_lines(&concatenated_content);
+        for result in parsed_results {
+            match result {
+                Ok((prompt, action_json)) => {
+                    // Validate action_json decodes to a Decision
+                    match serde_json::from_value::<Decision>(action_json.clone()) {
+                        Ok(_) => {
+                            let policy = Policy {
+                                r#type: get_policy_type(),
+                                prompt,
+                                action: action_json,
+                            };
+                            manager.add(policy);
+                        }
+                        Err(e) => {
+                            eprintln!(
+                                "Error validating action JSON for prompt '{}': {}",
+                                prompt, e
+                            );
+                            std::process::exit(13);
+                        }
+                    }
+                }
+                Err(e) => {
+                    eprintln!("Error parsing policy: {}", e);
+                }
+            }
+        }
+    }
     for thread in Notification::fetch_all::<chrono::FixedOffset>(false, false, None, None)
         .await?
         .into_iter()
@@ -109,13 +147,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         match (decision.mark_unread, decision.mark_read) {
             (true, false) => {
                 println!("suggesting to mark this one unread");
-                if confirm_via_ui(&summary) {
+                if confirm_via_ui(&summary, "unread") {
                     thread.mark_as_unread().await.unwrap();
                 }
             }
             (false, true) => {
                 println!("suggesting to mark this one read");
-                if confirm_via_ui(&summary) {
+                if confirm_via_ui(&summary, "read") {
                     thread.mark_as_read().await.unwrap();
                 }
             }
