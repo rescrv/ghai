@@ -1,4 +1,339 @@
-use chrono::{DateTime, FixedOffset};
+use crate::http::{GitHubClient, UrlBuilder};
+use chrono::{DateTime, TimeZone};
+
+#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct IssueDependenciesSummary {
+    pub blocked_by: i64,
+    pub blocking: i64,
+    pub total_blocked_by: i64,
+    pub total_blocking: i64,
+}
+
+#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct IssueFieldValueSingleSelectOption {
+    pub id: i64,
+    pub name: String,
+    pub color: String,
+}
+
+#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct IssueFieldValue {
+    pub issue_field_id: i64,
+    pub node_id: String,
+    pub data_type: String,
+    pub value: Option<serde_json::Value>,
+    pub single_select_option: Option<IssueFieldValueSingleSelectOption>,
+}
+
+#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct IssueType {
+    pub id: i64,
+    pub node_id: String,
+    pub name: String,
+    pub description: Option<String>,
+    pub color: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+    pub is_enabled: bool,
+}
+
+#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct Commit {
+    pub id: String,
+    pub tree_id: String,
+    pub distinct: bool,
+    pub message: String,
+    pub timestamp: String,
+    pub url: String,
+    pub author: CommitUser,
+    pub committer: CommitUser,
+    pub added: Vec<String>,
+    pub removed: Vec<String>,
+    pub modified: Vec<String>,
+}
+
+#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct CommitUser {
+    pub name: String,
+    pub email: String,
+    pub username: Option<String>,
+}
+
+#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct Repository {
+    pub id: i64,
+    pub node_id: String,
+    pub name: String,
+    pub full_name: String,
+    pub private: bool,
+    pub owner: SimpleUser,
+    pub html_url: String,
+    pub description: Option<String>,
+    pub fork: bool,
+    pub url: String,
+    pub archive_url: String,
+    pub assignees_url: String,
+    pub blobs_url: String,
+    pub branches_url: String,
+    pub collaborators_url: String,
+    pub comments_url: String,
+    pub commits_url: String,
+    pub compare_url: String,
+    pub contents_url: String,
+    pub contributors_url: String,
+    pub deployments_url: String,
+    pub downloads_url: String,
+    pub events_url: String,
+    pub forks_url: String,
+    pub git_commits_url: String,
+    pub git_refs_url: String,
+    pub git_tags_url: String,
+    pub git_url: Option<String>,
+    pub issue_comment_url: String,
+    pub issue_events_url: String,
+    pub issues_url: String,
+    pub keys_url: String,
+    pub labels_url: String,
+    pub languages_url: String,
+    pub merges_url: String,
+    pub milestones_url: String,
+    pub notifications_url: String,
+    pub pulls_url: String,
+    pub releases_url: String,
+    pub ssh_url: Option<String>,
+    pub stargazers_url: String,
+    pub statuses_url: String,
+    pub subscribers_url: String,
+    pub subscription_url: String,
+    pub tags_url: String,
+    pub teams_url: String,
+    pub trees_url: String,
+    pub clone_url: Option<String>,
+    pub mirror_url: Option<String>,
+    pub hooks_url: String,
+    pub svn_url: Option<String>,
+    pub homepage: Option<String>,
+    pub language: Option<String>,
+    pub forks_count: Option<u64>,
+    pub stargazers_count: Option<u64>,
+    pub watchers_count: Option<u64>,
+    pub size: Option<u64>,
+    pub default_branch: Option<String>,
+    pub open_issues_count: Option<u64>,
+    pub is_template: Option<bool>,
+    pub topics: Option<Vec<String>>,
+    pub has_issues: Option<bool>,
+    pub has_projects: Option<bool>,
+    pub has_wiki: Option<bool>,
+    pub has_pages: Option<bool>,
+    pub has_downloads: Option<bool>,
+    pub has_discussions: Option<bool>,
+    pub archived: Option<bool>,
+    pub disabled: Option<bool>,
+    pub visibility: Option<String>,
+    pub pushed_at: Option<String>,
+    pub created_at: Option<String>,
+    pub updated_at: Option<String>,
+    pub permissions: Option<RepositoryPermissions>,
+    pub allow_rebase_merge: Option<bool>,
+    pub template_repository: Option<serde_json::Value>,
+    pub temp_clone_token: Option<String>,
+    pub allow_squash_merge: Option<bool>,
+    pub allow_auto_merge: Option<bool>,
+    pub delete_branch_on_merge: Option<bool>,
+    pub allow_merge_commit: Option<bool>,
+    pub allow_forking: Option<bool>,
+    pub web_commit_signoff_required: Option<bool>,
+    pub subscribers_count: Option<u64>,
+    pub network_count: Option<u64>,
+    pub license: Option<RepositoryLicense>,
+    pub forks: Option<u64>,
+    pub open_issues: Option<u64>,
+    pub watchers: Option<u64>,
+}
+
+#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct RepositoryPermissions {
+    pub admin: bool,
+    pub maintain: Option<bool>,
+    pub push: bool,
+    pub pull: bool,
+    pub triage: Option<bool>,
+}
+
+#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct RepositoryLicense {
+    pub key: String,
+    pub name: String,
+    pub spdx_id: Option<String>,
+    pub url: Option<String>,
+    pub node_id: String,
+}
+
+#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct Milestone {
+    pub url: String,
+    pub html_url: String,
+    pub labels_url: String,
+    pub id: i64,
+    pub node_id: String,
+    pub number: u64,
+    pub title: String,
+    pub description: Option<String>,
+    pub creator: Option<SimpleUser>,
+    pub open_issues: u64,
+    pub closed_issues: u64,
+    pub state: String,
+    pub created_at: String,
+    pub updated_at: String,
+    pub due_on: Option<String>,
+    pub closed_at: Option<String>,
+}
+
+#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct IssuePullRequest {
+    pub url: String,
+    pub html_url: String,
+    pub diff_url: String,
+    pub patch_url: String,
+    pub merged_at: Option<String>,
+}
+
+#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct Integration {
+    pub id: i64,
+    pub slug: Option<String>,
+    pub node_id: String,
+    pub owner: SimpleUser,
+    pub name: String,
+    pub description: Option<String>,
+    pub external_url: String,
+    pub html_url: String,
+    pub created_at: String,
+    pub updated_at: String,
+    pub permissions: IntegrationPermissions,
+    pub events: Vec<String>,
+    pub installations_count: Option<u64>,
+    pub client_id: Option<String>,
+    pub client_secret: Option<String>,
+    pub webhook_secret: Option<String>,
+    pub pem: Option<String>,
+}
+
+#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct IntegrationPermissions {
+    pub issues: Option<String>,
+    pub checks: Option<String>,
+    pub metadata: Option<String>,
+    pub contents: Option<String>,
+    pub deployments: Option<String>,
+}
+
+#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
+#[serde(deny_unknown_fields)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum AuthorAssociation {
+    Owner,
+    Member,
+    Collaborator,
+    Contributor,
+    FirstTimeContributor,
+    FirstTimer,
+    Mannequin,
+    None,
+}
+
+#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ReactionRollup {
+    pub url: String,
+    pub total_count: u64,
+    #[serde(rename = "+1")]
+    pub plus_one: u64,
+    #[serde(rename = "-1")]
+    pub minus_one: u64,
+    pub laugh: u64,
+    pub hooray: u64,
+    pub confused: u64,
+    pub heart: u64,
+    pub rocket: u64,
+    pub eyes: u64,
+}
+
+#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct SubIssuesSummary {
+    pub completed: u64,
+    pub percent_completed: u64,
+    pub total: u64,
+}
+
+#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct Links {
+    #[serde(rename = "self")]
+    pub self_link: Link,
+    pub html: Link,
+    pub issue: Option<Link>,
+    pub comments: Option<Link>,
+    pub review_comments: Option<Link>,
+    pub review_comment: Option<Link>,
+    pub commits: Option<Link>,
+    pub statuses: Option<Link>,
+}
+
+#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct Team {
+    pub id: i64,
+    pub node_id: String,
+    pub url: String,
+    pub html_url: String,
+    pub name: String,
+    pub slug: String,
+    pub description: Option<String>,
+    pub privacy: String,
+    pub permission: String,
+    pub members_url: String,
+    pub repositories_url: String,
+    pub parent: Option<Box<Team>>,
+}
+
+#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct AutoMerge {
+    pub enabled_by: SimpleUser,
+    pub merge_method: String,
+    pub commit_title: Option<String>,
+    pub commit_message: Option<String>,
+}
+
+#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct HeadCommit {
+    pub id: String,
+    pub tree_id: String,
+    pub message: String,
+    pub timestamp: String,
+    pub author: CommitUser,
+    pub committer: CommitUser,
+    pub added: Vec<String>,
+    pub removed: Vec<String>,
+    pub modified: Vec<String>,
+}
 
 #[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
 #[serde(deny_unknown_fields)]
@@ -6,7 +341,7 @@ pub struct SimpleUser {
     pub name: Option<String>,
     pub email: Option<String>,
     pub login: String,
-    pub id: serde_json::Value,
+    pub id: i64,
     pub node_id: String,
     pub avatar_url: String,
     pub gravatar_id: Option<String>,
@@ -30,7 +365,7 @@ pub struct SimpleUser {
 #[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Actor {
-    pub id: serde_json::Value,
+    pub id: i64,
     pub login: String,
     pub display_login: Option<String>,
     pub gravatar_id: Option<String>,
@@ -66,12 +401,12 @@ pub struct Event {
 pub enum EventPayload {
     IssueComment {
         action: String,
-        issue: Issue,
-        comment: IssueComment,
+        issue: Box<Issue>,
+        comment: Box<IssueComment>,
     },
     Issue {
         action: String,
-        issue: Issue,
+        issue: Box<Issue>,
     },
     Create {
         description: String,
@@ -82,8 +417,7 @@ pub enum EventPayload {
     },
     PushEvent {
         before: String,
-        // TODO(rescrv): commits
-        commits: Vec<serde_json::Value>,
+        commits: Vec<Commit>,
         distinct_size: u64,
         head: String,
         push_id: u64,
@@ -99,21 +433,20 @@ pub enum EventPayload {
     PullRequest {
         action: String,
         number: u64,
-        pull_request: PullRequest,
+        pull_request: Box<PullRequest>,
     },
     PullRequestReview {
         action: String,
-        pull_request: PullRequest,
-        review: PullRequestReview,
+        pull_request: Box<PullRequest>,
+        review: Box<PullRequestReview>,
     },
     PullRequestComment {
         action: String,
-        pull_request: PullRequest,
-        comment: PullRequestReviewComment,
+        pull_request: Box<PullRequest>,
+        comment: Box<PullRequestReviewComment>,
     },
     Forkee {
-        // TODO(rescrv): repository
-        forkee: serde_json::Value,
+        forkee: Box<Repository>,
     },
     Action {
         action: String,
@@ -136,6 +469,15 @@ pub enum Label {
     Simple(String),
 }
 
+impl Label {
+    pub fn name(&self) -> &str {
+        match self {
+            Self::Detailed { name, .. } => name.as_str(),
+            Self::Simple(name) => name.as_str(),
+        }
+    }
+}
+
 #[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Link {
@@ -145,7 +487,7 @@ pub struct Link {
 #[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Issue {
-    pub id: serde_json::Value,
+    pub id: i64,
     pub node_id: String,
     pub url: String,
     pub repository_url: String,
@@ -162,13 +504,11 @@ pub struct Issue {
     pub labels: Vec<Label>,
     pub assignee: Option<SimpleUser>,
     pub assignees: Option<Vec<SimpleUser>>,
-    // TODO(rescrv): milestone
-    pub milestone: Option<serde_json::Value>,
+    pub milestone: Option<Milestone>,
     pub locked: bool,
     pub active_lock_reason: Option<String>,
     pub comments: u64,
-    // TODO(rescrv): issue-pull-request
-    pub pull_request: Option<serde_json::Value>,
+    pub pull_request: Option<IssuePullRequest>,
     pub closed_at: Option<String>,
     pub created_at: String,
     pub updated_at: String,
@@ -177,51 +517,44 @@ pub struct Issue {
     pub body_html: Option<String>,
     pub body_text: Option<String>,
     pub timeline_url: Option<String>,
-    // TODO(rescrv): repository
-    pub repository: Option<serde_json::Value>,
-    // TODO(rescrv): integration
-    pub performed_via_github_app: Option<serde_json::Value>,
-    // TODO(rescrv): author-association
-    pub author_association: serde_json::Value,
-    // TODO(rescrv): reaction-rollup
-    pub reactions: Option<serde_json::Value>,
-    // TODO(rescrv): sub-issues-summary
-    pub sub_issues_summary: Option<serde_json::Value>,
+    pub repository: Option<Repository>,
+    pub performed_via_github_app: Option<Integration>,
+    pub author_association: AuthorAssociation,
+    pub reactions: Option<ReactionRollup>,
+    pub sub_issues_summary: Option<SubIssuesSummary>,
+    pub issue_dependencies_summary: Option<IssueDependenciesSummary>,
+    pub issue_field_values: Option<Vec<IssueFieldValue>>,
+    pub parent_issue_url: Option<String>,
+    #[serde(rename = "type")]
+    pub r#type: Option<IssueType>,
 }
 
 impl Issue {
-    pub fn fetch_all(
-        org: String,
+    #[allow(clippy::too_many_arguments)]
+    pub async fn fetch_user_issues<Tz: TimeZone>(
         filter: Option<String>,
         state: Option<String>,
+        labels: Option<String>,
         sort: Option<String>,
-        since: Option<DateTime<FixedOffset>>,
-    ) -> Result<Vec<Issue>, std::io::Error> {
-        let mut sep = '?';
-        let mut url = format!("/orgs/{org}/issues");
-        if let Some(filter) = filter {
-            url.push_str(&format!("{sep}filter={filter}"));
-            sep = '&';
-        }
-        if let Some(state) = state {
-            url.push_str(&format!("{sep}state={state}"));
-            sep = '&';
-        }
-        if let Some(sort) = sort {
-            url.push_str(&format!("{sep}sort={sort}"));
-            sep = '&';
-        }
-        if let Some(since) = since {
-            url.push_str(&format!("{sep}since={}", since.to_rfc3339()));
-            sep = '&';
-        }
-        _ = sep;
-        let output = std::process::Command::new("gh")
-            .arg("api")
-            .arg(url)
-            .output()?;
-        let mut issues: Vec<Issue> = serde_json::from_slice(&output.stdout)?;
-        issues.sort_by_key(|n| n.number);
+        direction: Option<String>,
+        since: Option<DateTime<Tz>>,
+        per_page: Option<u64>,
+        page: Option<u64>,
+    ) -> Result<Vec<Issue>, Box<dyn std::error::Error>> {
+        let url = UrlBuilder::new("https://api.github.com/issues")
+            .param("filter", filter)
+            .param("state", state)
+            .param("labels", labels)
+            .param("sort", sort)
+            .param("direction", direction)
+            .param("since", since.map(|s| s.to_rfc3339()))
+            .param("per_page", per_page)
+            .param("page", page)
+            .build();
+
+        let client = GitHubClient::new()?;
+        let issues: Vec<Issue> = client.get(&url).send().await?.json().await?;
+
         Ok(issues)
     }
 }
@@ -229,35 +562,31 @@ impl Issue {
 #[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct IssueComment {
-    pub id: serde_json::Value,
+    pub id: i64,
     pub node_id: String,
     pub url: String,
     pub body: Option<String>,
     pub body_text: Option<String>,
-    pub body_hmtl: Option<String>,
+    pub body_html: Option<String>,
     pub html_url: String,
     pub user: Option<SimpleUser>,
     pub created_at: String,
     pub updated_at: String,
     pub issue_url: String,
-    // TODO(rescrv):  author-association
-    pub author_association: String,
-    // TODO(rescrv):  integration
-    pub performed_via_github_app: Option<serde_json::Value>,
-    // TODO(rescrv):  reaction-rollup
-    pub reactions: Option<serde_json::Value>,
+    pub author_association: AuthorAssociation,
+    pub performed_via_github_app: Option<Integration>,
+    pub reactions: Option<ReactionRollup>,
 }
 
 #[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct PullRequestReview {
-    // TODO(rescrv):  _links
-    pub _links: Option<serde_json::Value>,
+    pub _links: Option<Links>,
     pub author_association: String,
     pub body: Option<String>,
     pub commit_id: String,
     pub html_url: String,
-    pub id: serde_json::Value,
+    pub id: i64,
     pub node_id: String,
     pub pull_request_url: String,
     pub state: String,
@@ -268,25 +597,21 @@ pub struct PullRequestReview {
 #[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct PullRequestReviewComment {
-    pub id: serde_json::Value,
+    pub id: i64,
     pub node_id: String,
     pub url: String,
     pub body: Option<String>,
     pub body_text: Option<String>,
-    pub body_hmtl: Option<String>,
+    pub body_html: Option<String>,
     pub html_url: String,
     pub user: Option<SimpleUser>,
     pub created_at: String,
     pub updated_at: String,
     pub issue_url: Option<String>,
-    // TODO(rescrv):  author-association
-    pub author_association: String,
-    // TODO(rescrv):  integration
-    pub performed_via_github_app: Option<serde_json::Value>,
-    // TODO(rescrv):  reaction-rollup
-    pub reactions: Option<serde_json::Value>,
-    // TODO(rescrv):  _links
-    pub _links: Option<serde_json::Value>,
+    pub author_association: AuthorAssociation,
+    pub performed_via_github_app: Option<Integration>,
+    pub reactions: Option<ReactionRollup>,
+    pub _links: Option<Links>,
     pub commit_id: Option<String>,
     pub diff_hunk: Option<String>,
     pub line: Option<u64>,
@@ -313,15 +638,14 @@ pub struct PullRequestHead {
     pub r#ref: String,
     pub sha: String,
     pub user: SimpleUser,
-    // TODO(rescrv):  repository
-    pub repo: serde_json::Value,
+    pub repo: Repository,
 }
 
 #[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct PullRequest {
     pub url: String,
-    pub id: serde_json::Value,
+    pub id: i64,
     pub node_id: String,
     pub html_url: String,
     pub diff_url: String,
@@ -339,8 +663,7 @@ pub struct PullRequest {
     pub user: SimpleUser,
     pub body: Option<String>,
     pub labels: Vec<Label>,
-    // TODO(rescrv): nullable-milestone
-    pub milestone: serde_json::Value,
+    pub milestone: Option<Milestone>,
     pub active_lock_reason: Option<String>,
     pub created_at: String,
     pub updated_at: String,
@@ -350,16 +673,12 @@ pub struct PullRequest {
     pub assignee: Option<SimpleUser>,
     pub assignees: Option<Vec<SimpleUser>>,
     pub requested_reviewers: Option<Vec<SimpleUser>>,
-    // TODO(rescrv): team-simple
-    pub requested_teams: Option<serde_json::Value>,
+    pub requested_teams: Option<Vec<Team>>,
     pub head: PullRequestHead,
     pub base: PullRequestHead,
-    // TODO(rescrv): _links
-    pub _links: serde_json::Value,
-    // TODO(rescrv): author-association
-    pub author_association: String,
-    // TODO(rescrv): auto-merge
-    pub auto_merge: serde_json::Value,
+    pub _links: Links,
+    pub author_association: AuthorAssociation,
+    pub auto_merge: Option<AutoMerge>,
     pub draft: Option<bool>,
     pub merged: Option<bool>,
     pub mergeable: Option<bool>,
@@ -376,22 +695,23 @@ pub struct PullRequest {
 }
 
 impl PullRequest {
-    pub fn fetch_comments(
+    pub async fn fetch_comments<Tz: TimeZone>(
         &self,
-        since: Option<DateTime<FixedOffset>>,
-    ) -> Result<Vec<IssueComment>, std::io::Error> {
-        let mut sep = '?';
-        let mut url = self.comments_url.clone();
-        if let Some(since) = since {
-            url = format!("{url}{sep}since={}", since.to_rfc3339());
-            sep = '&';
-        }
-        _ = sep;
-        let output = std::process::Command::new("gh")
-            .arg("api")
-            .arg(&url)
-            .output()?;
-        Ok(serde_json::from_slice(&output.stdout)?)
+        since: Option<DateTime<Tz>>,
+    ) -> Result<Vec<IssueComment>, Box<dyn std::error::Error>> {
+        let url = UrlBuilder::new(&self.comments_url)
+            .param("since", since.map(|s| s.to_rfc3339()))
+            .build();
+
+        let client = GitHubClient::new()?;
+        let response = client
+            .get(&url)
+            .send()
+            .await?
+            .json::<Vec<IssueComment>>()
+            .await?;
+
+        Ok(response)
     }
 }
 
@@ -413,60 +733,86 @@ pub struct Notification {
     pub updated_at: String,
     pub last_read_at: Option<String>,
     pub subject: NotificationSubject,
-    // TODO(rescrv):  minimal-repository
-    pub repository: serde_json::Value,
+    pub repository: Repository,
     pub url: String,
     pub subscription_url: String,
 }
 
 impl Notification {
-    pub fn fetch_all(
+    pub async fn fetch_all<Tz: chrono::TimeZone>(
         all: bool,
         participating: bool,
-        since: Option<DateTime<FixedOffset>>,
-        before: Option<DateTime<FixedOffset>>,
-    ) -> Result<Vec<Notification>, std::io::Error> {
-        let mut sep = '?';
-        let mut url = "/notifications".to_string();
-        if all {
-            url.push_str(&format!("{}all=true", sep));
-            sep = '&';
-        }
-        if participating {
-            url.push_str(&format!("{}participating=true", sep));
-            sep = '&';
-        }
-        if let Some(since) = since {
-            url.push_str(&format!("{}since={}", sep, since.to_rfc3339()));
-            sep = '&';
-        }
-        if let Some(before) = before {
-            url.push_str(&format!("{}before={}", sep, before.to_rfc3339()));
-            sep = '&';
-        }
-        _ = sep;
-        let output = std::process::Command::new("gh")
-            .arg("api")
-            .arg(url)
-            .output()?;
-        let mut notifications: Vec<Notification> = serde_json::from_slice(&output.stdout)?;
+        since: Option<DateTime<Tz>>,
+        before: Option<DateTime<Tz>>,
+    ) -> Result<Vec<Notification>, Box<dyn std::error::Error>> {
+        let url = UrlBuilder::new("https://api.github.com/notifications")
+            .param("all", if all { Some("true") } else { None })
+            .param(
+                "participating",
+                if participating { Some("true") } else { None },
+            )
+            .param("since", since.map(|s| s.to_rfc3339()))
+            .param("before", before.map(|s| s.to_rfc3339()))
+            .build();
+
+        let client = GitHubClient::new()?;
+        let mut notifications: Vec<Notification> = client.get(&url).send().await?.json().await?;
+
         notifications.sort_by_key(|n| n.updated_at.clone());
         Ok(notifications)
     }
 
-    pub fn fetch_pull_request(&self) -> Result<PullRequest, std::io::Error> {
+    pub async fn fetch_pull_request(&self) -> Result<PullRequest, Box<dyn std::error::Error>> {
         if self.subject.r#type != "PullRequest" {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::InvalidData,
-                "not a pull request",
-            ));
+            return Err("not a pull request".into());
         }
-        let output = std::process::Command::new("gh")
-            .arg("api")
-            .arg(&self.subject.url)
-            .output()?;
-        let pull_request: PullRequest = serde_json::from_slice(&output.stdout)?;
+
+        let client = GitHubClient::new()?;
+        let pull_request: PullRequest = client.get(&self.subject.url).send().await?.json().await?;
+
         Ok(pull_request)
+    }
+
+    pub async fn fetch_issue(&self) -> Result<Issue, Box<dyn std::error::Error>> {
+        if self.subject.r#type != "Issue" {
+            return Err("not an issue".into());
+        }
+
+        let client = GitHubClient::new()?;
+        let issue: Issue = client.get(&self.subject.url).send().await?.json().await?;
+
+        Ok(issue)
+    }
+
+    pub async fn mark_as_read(&self) -> Result<(), Box<dyn std::error::Error>> {
+        let client = GitHubClient::new()?;
+        let url = format!("https://api.github.com/notifications/threads/{}", self.id);
+
+        client
+            .request(reqwest::Method::PATCH, &url)
+            .send()
+            .await?
+            .error_for_status()?;
+
+        Ok(())
+    }
+
+    pub async fn mark_as_unread(&self) -> Result<(), Box<dyn std::error::Error>> {
+        let client = GitHubClient::new()?;
+        let url = format!("https://api.github.com/notifications/threads/{}", self.id);
+
+        let payload = serde_json::json!({
+            "unread": true
+        });
+
+        client
+            .request(reqwest::Method::PATCH, &url)
+            .json(&payload)
+            .send()
+            .await?
+            .error_for_status()?;
+
+        Ok(())
     }
 }
 
@@ -481,7 +827,7 @@ pub struct ReferencedWorkflow {
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Action {
-    pub id: serde_json::Value,
+    pub id: i64,
     pub name: Option<String>,
     pub node_id: String,
     pub check_suite_id: Option<u64>,
@@ -498,8 +844,7 @@ pub struct Action {
     pub workflow_id: u64,
     pub url: String,
     pub html_url: String,
-    // TODO(rescrv): pull-request-minimal
-    pub pull_requests: Vec<serde_json::Value>,
+    pub pull_requests: Vec<IssuePullRequest>,
     pub created_at: String,
     pub updated_at: String,
     pub actor: Option<SimpleUser>,
@@ -513,12 +858,9 @@ pub struct Action {
     pub rerun_url: String,
     pub previous_attempt_url: Option<String>,
     pub workflow_url: String,
-    // TODO(rescrv): head-commit
-    pub head_commit: serde_json::Value,
-    // TODO(rescrv): head-repository
-    pub repository: serde_json::Value,
-    // TODO(rescrv): head-repository
-    pub head_repository: serde_json::Value,
+    pub head_commit: HeadCommit,
+    pub repository: Repository,
+    pub head_repository: Repository,
     pub head_repository_id: Option<u64>,
     pub display_title: String,
 }
@@ -539,7 +881,7 @@ pub struct RunJobs {
 
 impl Action {
     #[allow(clippy::too_many_arguments)]
-    pub fn fetch_all(
+    pub async fn fetch_all(
         owner: String,
         repo: String,
         actor: Option<String>,
@@ -548,52 +890,29 @@ impl Action {
         workflow_run_status: Option<String>,
         per_page: Option<u64>,
         page: Option<u64>,
-    ) -> Result<Vec<Action>, std::io::Error> {
-        let mut sep = '?';
-        let mut url = format!("/repos/{owner}/{repo}/actions/runs");
-        if let Some(actor) = actor {
-            url.push_str(&format!("{sep}actor={actor}"));
-            sep = '&';
-        }
-        if let Some(workflow_run_branch) = workflow_run_branch {
-            url.push_str(&format!("{sep}workflow_run_branch={workflow_run_branch}"));
-            sep = '&';
-        }
-        if let Some(event) = event {
-            url.push_str(&format!("{sep}event={event}"));
-            sep = '&';
-        }
-        if let Some(workflow_run_status) = workflow_run_status {
-            url.push_str(&format!("{sep}workflow_run_status={workflow_run_status}"));
-            sep = '&';
-        }
-        if let Some(per_page) = per_page {
-            url.push_str(&format!("{sep}per_page={per_page}"));
-            sep = '&';
-        }
-        if let Some(page) = page {
-            url.push_str(&format!("{sep}page={page}"));
-            sep = '&';
-        }
-        _ = sep;
-        let output = std::process::Command::new("gh")
-            .arg("api")
-            .arg(url)
-            .output()?;
-        let mut runs: Runs = serde_json::from_slice(&output.stdout)?;
+    ) -> Result<Vec<Action>, Box<dyn std::error::Error>> {
+        let url = UrlBuilder::new(format!(
+            "https://api.github.com/repos/{owner}/{repo}/actions/runs"
+        ))
+        .param("actor", actor)
+        .param("workflow_run_branch", workflow_run_branch)
+        .param("event", event)
+        .param("workflow_run_status", workflow_run_status)
+        .param("per_page", per_page)
+        .param("page", page)
+        .build();
+
+        let client = GitHubClient::new()?;
+        let mut runs: Runs = client.get(&url).send().await?.json().await?;
+
         runs.workflow_runs.sort_by_key(|n| n.updated_at.clone());
         Ok(runs.workflow_runs)
     }
 
-    pub fn fetch_jobs(&self) -> Result<Vec<Job>, std::io::Error> {
-        let sep = '?';
-        let url = self.jobs_url.clone();
-        _ = sep;
-        let output = std::process::Command::new("gh")
-            .arg("api")
-            .arg(&url)
-            .output()?;
-        let run_jobs: RunJobs = serde_json::from_slice(&output.stdout)?;
+    pub async fn fetch_jobs(&self) -> Result<Vec<Job>, Box<dyn std::error::Error>> {
+        let client = GitHubClient::new()?;
+        let run_jobs: RunJobs = client.get(&self.jobs_url).send().await?.json().await?;
+
         Ok(run_jobs.jobs)
     }
 }
@@ -612,7 +931,7 @@ pub struct JobStep {
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Job {
-    pub id: serde_json::Value,
+    pub id: i64,
     pub run_id: u64,
     pub run_url: String,
     pub run_attempt: Option<u64>,

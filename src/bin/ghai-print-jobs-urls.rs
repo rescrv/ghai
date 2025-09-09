@@ -31,7 +31,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         options.status.clone(),
         None,
         None,
-    )?
+    )
+    .await?
     .into_iter()
     {
         println!("{}", action.jobs_url);

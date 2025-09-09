@@ -32,7 +32,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             options.status.clone(),
             None,
             None,
-        )?;
+        )
+        .await?;
         if first {
             for action in actions {
                 if action.status != Some("completed".to_string()) {
