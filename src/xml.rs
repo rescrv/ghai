@@ -161,6 +161,46 @@ pub fn build_issue_statistics_context(comments: u64) -> String {
         .build()
 }
 
+/// Build comments since last read XML section
+pub fn build_comments_since_last_read_context(comments: &[crate::IssueComment]) -> String {
+    if comments.is_empty() {
+        return String::from("<comments_since_last_read></comments_since_last_read>\n");
+    }
+
+    XmlBuilder::new()
+        .section("comments_since_last_read", |mut b| {
+            for comment in comments {
+                b = b.section("comment", |cb| {
+                    let mut cb = cb
+                        .field("id", comment.id)
+                        .field("created_at", &comment.created_at)
+                        .field("updated_at", &comment.updated_at);
+
+                    if let Some(user) = &comment.user {
+                        cb = cb.field("author", &user.login);
+                    }
+
+                    if let Some(body) = &comment.body {
+                        // Truncate long comments to keep context manageable
+                        if body.len() > 500 {
+                            let truncated: String = body.chars().take(500).collect();
+                            cb = cb.field(
+                                "body",
+                                escape_xml(&format!("{}... (truncated)", truncated)),
+                            );
+                        } else {
+                            cb = cb.field("body", escape_xml(body));
+                        }
+                    }
+
+                    cb
+                });
+            }
+            b
+        })
+        .build()
+}
+
 /// Build dates XML section
 pub fn build_dates_context(
     created_at: &str,
@@ -302,6 +342,7 @@ pub fn build_issue_context(number: u64, title: &str, state: &str) -> String {
 pub fn build_pull_request_notification_context(
     thread: &crate::Notification,
     pr: &crate::PullRequest,
+    comments_since_last_read: &[crate::IssueComment],
 ) -> String {
     let mut context = String::new();
 
@@ -393,6 +434,11 @@ pub fn build_pull_request_notification_context(
     // <description>
     context.push_str(&build_description_context(pr.body.as_deref()));
 
+    // <comments_since_last_read>
+    context.push_str(&build_comments_since_last_read_context(
+        comments_since_last_read,
+    ));
+
     context.push_str("</pull_request>\n\n");
     context
 }
@@ -401,6 +447,7 @@ pub fn build_pull_request_notification_context(
 pub fn build_issue_notification_context(
     thread: &crate::Notification,
     issue: &crate::Issue,
+    comments_since_last_read: &[crate::IssueComment],
 ) -> String {
     let mut context = String::new();
 
@@ -467,6 +514,11 @@ pub fn build_issue_notification_context(
 
     // <description>
     context.push_str(&build_description_context(issue.body.as_deref()));
+
+    // <comments_since_last_read>
+    context.push_str(&build_comments_since_last_read_context(
+        comments_since_last_read,
+    ));
 
     context.push_str("</issue>\n\n");
     context

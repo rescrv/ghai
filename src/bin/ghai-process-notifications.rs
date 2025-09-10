@@ -8,10 +8,11 @@ use claudius::{Anthropic, ContentBlock, KnownModel, MessageCreateParams, Model};
 use policyai::{Manager, Policy, Usage};
 use std::io::{self, Write};
 
+use chrono::{DateTime, FixedOffset};
 use ghai::parser::parse_lines;
 use ghai::policy::{get_policy_type, Decision};
 use ghai::xml::{build_issue_notification_context, build_pull_request_notification_context};
-use ghai::Notification;
+use ghai::{CommentFetcher, IssueComment, Notification};
 
 #[derive(Debug, Default, Eq, PartialEq, arrrg_derive::CommandLine)]
 struct Options {
@@ -210,11 +211,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let llm_prompt = match thread.subject.r#type.as_str() {
             "PullRequest" => {
                 let pr = thread.fetch_pull_request().await?;
-                build_pull_request_notification_context(&thread, &pr)
+                let comments_since_last_read =
+                    fetch_comments_since_last_read(&pr, &thread, &opts).await;
+                build_pull_request_notification_context(&thread, &pr, &comments_since_last_read)
             }
             "Issue" => {
                 let issue = thread.fetch_issue().await?;
-                build_issue_notification_context(&thread, &issue)
+                let comments_since_last_read =
+                    fetch_comments_since_last_read(&issue, &thread, &opts).await;
+                build_issue_notification_context(&thread, &issue, &comments_since_last_read)
             }
             x => {
                 eprintln!("⚠ Skipping unsupported notification type: {}", x);
@@ -329,4 +334,25 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     Ok(())
+}
+
+async fn fetch_comments_since_last_read(
+    fetcher: &impl CommentFetcher,
+    thread: &Notification,
+    opts: &Options,
+) -> Vec<IssueComment> {
+    let since_time = thread
+        .last_read_at
+        .as_ref()
+        .and_then(|t| t.parse::<DateTime<FixedOffset>>().ok());
+
+    fetcher
+        .fetch_comments(since_time)
+        .await
+        .unwrap_or_else(|e| {
+            if !opts.quiet {
+                eprintln!("⚠ Could not fetch comments: {}", e);
+            }
+            Vec::new()
+        })
 }

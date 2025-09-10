@@ -1,6 +1,35 @@
 use crate::http::{GitHubClient, UrlBuilder};
 use chrono::{DateTime, TimeZone};
 
+/// Trait for types that can fetch comments
+pub trait CommentFetcher: Sync {
+    fn comments_url(&self) -> &str;
+
+    fn fetch_comments<Tz: TimeZone>(
+        &self,
+        since: Option<DateTime<Tz>>,
+    ) -> impl std::future::Future<Output = Result<Vec<IssueComment>, Box<dyn std::error::Error>>> + Send
+    where
+        Tz::Offset: Send,
+    {
+        async {
+            let url = UrlBuilder::new(self.comments_url())
+                .param("since", since.map(|s| s.to_rfc3339()))
+                .build();
+
+            let client = GitHubClient::new()?;
+            let response = client
+                .get(&url)
+                .send()
+                .await?
+                .json::<Vec<IssueComment>>()
+                .await?;
+
+            Ok(response)
+        }
+    }
+}
+
 #[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct IssueDependenciesSummary {
@@ -559,6 +588,12 @@ impl Issue {
     }
 }
 
+impl CommentFetcher for Issue {
+    fn comments_url(&self) -> &str {
+        &self.comments_url
+    }
+}
+
 #[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct IssueComment {
@@ -694,24 +729,9 @@ pub struct PullRequest {
     pub changed_files: Option<u64>,
 }
 
-impl PullRequest {
-    pub async fn fetch_comments<Tz: TimeZone>(
-        &self,
-        since: Option<DateTime<Tz>>,
-    ) -> Result<Vec<IssueComment>, Box<dyn std::error::Error>> {
-        let url = UrlBuilder::new(&self.comments_url)
-            .param("since", since.map(|s| s.to_rfc3339()))
-            .build();
-
-        let client = GitHubClient::new()?;
-        let response = client
-            .get(&url)
-            .send()
-            .await?
-            .json::<Vec<IssueComment>>()
-            .await?;
-
-        Ok(response)
+impl CommentFetcher for PullRequest {
+    fn comments_url(&self) -> &str {
+        &self.comments_url
     }
 }
 
