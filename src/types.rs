@@ -816,24 +816,6 @@ impl Notification {
 
         Ok(())
     }
-
-    pub async fn mark_as_unread(&self) -> Result<(), Box<dyn std::error::Error>> {
-        let client = GitHubClient::new()?;
-        let url = format!("https://api.github.com/notifications/threads/{}", self.id);
-
-        let payload = serde_json::json!({
-            "unread": true
-        });
-
-        client
-            .request(reqwest::Method::PATCH, &url)
-            .json(&payload)
-            .send()
-            .await?
-            .error_for_status()?;
-
-        Ok(())
-    }
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]

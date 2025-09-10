@@ -26,6 +26,8 @@ struct Options {
     json: bool,
     #[arrrg(flag, "Auto-execute decisions without confirmation prompts")]
     no_confirm: bool,
+    #[arrrg(flag, "Mark as read by default; otherwise do nothing")]
+    mark_read_by_default: bool,
 }
 
 async fn generate_summary(
@@ -61,9 +63,10 @@ fn format_decision(decision: &Decision, opts: &Options) -> String {
     if opts.json {
         serde_json::to_string_pretty(decision).unwrap_or_else(|_| "{\"error\": true}".to_string())
     } else {
-        match (decision.mark_unread, decision.mark_read) {
-            (true, false) => "⚠ Mark as UNREAD".to_string(),
-            (false, true) => "✓ Mark as READ".to_string(),
+        match decision.action.as_str() {
+            "mark-read" => "✓ Mark as READ".to_string(),
+            "mark-unread" => "📌 Keep as unread".to_string(),
+            "" if opts.mark_read_by_default => "📖 Default to read".to_string(),
             _ => "⏭  Skip (no action)".to_string(),
         }
     }
@@ -123,8 +126,9 @@ fn confirm_via_ui(summary: &str, action: &str, opts: &Options) -> Result<bool, (
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let (opts, args) =
-        Options::from_command_line("USAGE: ghai-process-notifications [options] [policy-files...]");
+    let (opts, args) = Options::from_command_line_relaxed(
+        "USAGE: ghai-process-notifications [options] [policy-files...]",
+    );
 
     if opts.json && !opts.dry_run {
         eprintln!("❌ Error: --json flag requires --dry-run flag");
@@ -211,12 +215,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let llm_prompt = match thread.subject.r#type.as_str() {
             "PullRequest" => {
                 let pr = thread.fetch_pull_request().await?;
+                std::thread::sleep(std::time::Duration::from_secs(1));
                 let comments_since_last_read =
                     fetch_comments_since_last_read(&pr, &thread, &opts).await;
                 build_pull_request_notification_context(&thread, &pr, &comments_since_last_read)
             }
             "Issue" => {
                 let issue = thread.fetch_issue().await?;
+                std::thread::sleep(std::time::Duration::from_secs(1));
                 let comments_since_last_read =
                     fetch_comments_since_last_read(&issue, &thread, &opts).await;
                 build_issue_notification_context(&thread, &issue, &comments_since_last_read)
@@ -258,68 +264,53 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("{}", format_decision(&decision, &opts));
         }
 
-        match (decision.mark_unread, decision.mark_read) {
-            (true, false) => {
-                if !opts.quiet {
-                    println!("Suggestion: mark as unread");
-                }
-                if !opts.dry_run {
-                    match confirm_via_ui(&summary, "unread", &opts) {
-                        Ok(true) => {
-                            thread.mark_as_unread().await.unwrap();
-                            marked_unread += 1;
-                            if !opts.quiet {
-                                println!("✓ Marked as unread");
-                            }
-                        }
-                        Ok(false) => {
-                            skipped += 1;
-                        }
-                        Err(()) => {
-                            if !opts.quiet {
-                                println!("\n👋 Exiting at user request");
-                            }
-                            std::process::exit(0);
+        if decision.action == "mark-unread" {
+            if !opts.quiet {
+                println!("📌 Keeping as unread (no action needed)");
+                println!("Summary: {}", summary);
+                println!("URL: {}", thread.subject.url);
+            }
+            marked_unread += 1;
+        } else if decision.action == "mark-read"
+            || (decision.action.is_empty() && opts.mark_read_by_default)
+        {
+            let message = if decision.action == "mark-read" {
+                "Suggestion: mark as read"
+            } else {
+                "Default: mark as read"
+            };
+
+            if !opts.quiet {
+                println!("{}", message);
+            }
+            if !opts.dry_run {
+                match confirm_via_ui(&summary, "read", &opts) {
+                    Ok(true) => {
+                        thread.mark_as_read().await.unwrap();
+                        marked_read += 1;
+                        if !opts.quiet {
+                            println!("✓ Marked as read");
                         }
                     }
-                } else {
-                    skipped += 1;
-                }
-            }
-            (false, true) => {
-                if !opts.quiet {
-                    println!("Suggestion: mark as read");
-                }
-                if !opts.dry_run {
-                    match confirm_via_ui(&summary, "read", &opts) {
-                        Ok(true) => {
-                            thread.mark_as_read().await.unwrap();
-                            marked_read += 1;
-                            if !opts.quiet {
-                                println!("✓ Marked as read");
-                            }
-                        }
-                        Ok(false) => {
-                            skipped += 1;
-                        }
-                        Err(()) => {
-                            if !opts.quiet {
-                                println!("\n👋 Exiting at user request");
-                            }
-                            std::process::exit(0);
-                        }
+                    Ok(false) => {
+                        skipped += 1;
                     }
-                } else {
-                    skipped += 1;
+                    Err(()) => {
+                        if !opts.quiet {
+                            println!("\n👋 Exiting at user request");
+                        }
+                        std::process::exit(0);
+                    }
                 }
-            }
-            _ => {
+            } else {
                 skipped += 1;
-                if !opts.quiet {
-                    println!("No action needed - skipping");
-                    println!("Summary: {}", summary);
-                    println!("URL: {}", thread.subject.url);
-                }
+            }
+        } else {
+            skipped += 1;
+            if !opts.quiet {
+                println!("No action needed - skipping");
+                println!("Summary: {}", summary);
+                println!("URL: {}", thread.subject.url);
             }
         }
         std::thread::sleep(std::time::Duration::from_secs(1));

@@ -3,8 +3,7 @@ use policyai::PolicyType;
 ////////////////////////////////////////////// policy //////////////////////////////////////////////
 
 pub const POLICY: &str = r#"type ghai::Policy {
-    mark_unread: bool @ sticky = false,
-    mark_read: bool @ sticky = false,
+    action: ["mark-read", "mark-unread"] @ highest wins,
     priority: ["low", "medium", "high"] @ highest wins,
     label: [string],
 }
@@ -19,9 +18,7 @@ pub fn get_policy_type() -> PolicyType {
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct Decision {
     #[serde(default)]
-    pub mark_unread: bool,
-    #[serde(default)]
-    pub mark_read: bool,
+    pub action: String,
     #[serde(default)]
     pub priority: String,
     #[serde(default)]
