@@ -81,8 +81,11 @@ pub struct Commit {
     pub url: String,
     pub author: CommitUser,
     pub committer: CommitUser,
+    #[serde(default)]
     pub added: Vec<String>,
+    #[serde(default)]
     pub removed: Vec<String>,
+    #[serde(default)]
     pub modified: Vec<String>,
 }
 
@@ -359,8 +362,11 @@ pub struct HeadCommit {
     pub timestamp: String,
     pub author: CommitUser,
     pub committer: CommitUser,
+    #[serde(default)]
     pub added: Vec<String>,
+    #[serde(default)]
     pub removed: Vec<String>,
+    #[serde(default)]
     pub modified: Vec<String>,
 }
 
@@ -897,15 +903,21 @@ impl Action {
             "https://api.github.com/repos/{owner}/{repo}/actions/runs"
         ))
         .param("actor", actor)
-        .param("workflow_run_branch", workflow_run_branch)
+        .param("branch", workflow_run_branch)
         .param("event", event)
-        .param("workflow_run_status", workflow_run_status)
+        .param("status", workflow_run_status)
         .param("per_page", per_page)
         .param("page", page)
         .build();
 
         let client = GitHubClient::new()?;
-        let mut runs: Runs = client.get(&url).send().await?.json().await?;
+        let mut runs: Runs = client
+            .get(&url)
+            .send()
+            .await?
+            .error_for_status()?
+            .json()
+            .await?;
 
         runs.workflow_runs.sort_by_key(|n| n.updated_at.clone());
         Ok(runs.workflow_runs)
@@ -913,9 +925,33 @@ impl Action {
 
     pub async fn fetch_jobs(&self) -> Result<Vec<Job>, Box<dyn std::error::Error>> {
         let client = GitHubClient::new()?;
-        let run_jobs: RunJobs = client.get(&self.jobs_url).send().await?.json().await?;
+        let per_page = 100;
+        let mut page = 1;
+        let mut jobs = Vec::new();
 
-        Ok(run_jobs.jobs)
+        loop {
+            let url = UrlBuilder::new(&self.jobs_url)
+                .required_param("per_page", per_page)
+                .required_param("page", page)
+                .build();
+            let run_jobs: RunJobs = client
+                .get(&url)
+                .send()
+                .await?
+                .error_for_status()?
+                .json()
+                .await?;
+            let fetched = run_jobs.jobs.len();
+            let total = run_jobs.total_count as usize;
+            jobs.extend(run_jobs.jobs);
+
+            if fetched == 0 || fetched < per_page as usize || jobs.len() >= total {
+                break;
+            }
+            page += 1;
+        }
+
+        Ok(jobs)
     }
 }
 
@@ -956,4 +992,48 @@ pub struct Job {
     pub runner_group_name: Option<String>,
     pub workflow_name: Option<String>,
     pub head_branch: Option<String>,
+}
+
+impl Job {
+    pub async fn fetch_logs(&self) -> Result<String, Box<dyn std::error::Error>> {
+        let client = GitHubClient::new()?;
+        let url = format!("{}/logs", self.url);
+        let response = client.get(&url).send().await?.error_for_status()?;
+
+        Ok(response.text().await?)
+    }
+
+    pub fn failed_step(&self) -> Option<&JobStep> {
+        self.steps
+            .iter()
+            .find(|step| step.conclusion.as_deref() == Some("failure"))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn head_commit_allows_missing_file_lists() {
+        let commit: HeadCommit = serde_json::from_value(serde_json::json!({
+            "id": "abc123",
+            "tree_id": "def456",
+            "message": "run ci",
+            "timestamp": "2026-05-23T00:00:00Z",
+            "author": {
+                "name": "A. User",
+                "email": "a@example.com"
+            },
+            "committer": {
+                "name": "A. User",
+                "email": "a@example.com"
+            }
+        }))
+        .unwrap();
+
+        assert!(commit.added.is_empty());
+        assert!(commit.removed.is_empty());
+        assert!(commit.modified.is_empty());
+    }
 }
