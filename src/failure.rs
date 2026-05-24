@@ -162,8 +162,7 @@ pub async fn fetch_failure_reason_histogram(
         }
     }
 
-    let mut buckets: Vec<FailureReasonBucket> =
-        buckets.into_iter().map(|(_, bucket)| bucket).collect();
+    let mut buckets: Vec<FailureReasonBucket> = buckets.into_values().collect();
     buckets.sort_by(|left, right| {
         right
             .count
